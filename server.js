@@ -18,8 +18,52 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
-// Middleware
+// Apply CORS to all routes
 app.use(cors(corsOptions));
+
+// IMPORTANT: Webhook route MUST come BEFORE express.json() middleware
+app.post('/api/webhook', express.raw({type: 'application/json'}), (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    console.log('Webhook signature verified successfully');
+  } catch (err) {
+    console.log(`Webhook signature verification failed:`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      console.log('Payment successful for session:', session.id);
+      
+      // Generate access code
+      const accessCode = generateAccessCode();
+      console.log('Generated access code:', accessCode);
+      
+      // Get customer email from session
+      const customerEmail = session.customer_details?.email || 'No email provided';
+      console.log('Customer email:', customerEmail);
+      
+      // Get package type from metadata
+      const packageType = session.metadata?.packageType || 'Unknown package';
+      console.log('Package type:', packageType);
+      
+      // TODO: In production, save to database and send email to customer
+      console.log(`Access code ${accessCode} generated for ${customerEmail} - ${packageType}`);
+      
+      break;
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.json({received: true});
+});
+
+// Apply JSON middleware AFTER webhook route
 app.use(express.json());
 
 // Configuration
@@ -43,38 +87,36 @@ const PRICES = {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
-    message: 'Wedding Newspaper API is running on Railway!'
+    message: 'Wedding Newspaper API is running on Render!',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // Validate access code
-app.post('/api/validate-code', async (req, res) => {
-  try {
-    const { code } = req.body;
-    
-    if (!code) {
-      return res.status(400).json({ error: 'Access code is required' });
-    }
-    
-    // Simple validation - in production, check against database
-    if (code.startsWith('WN-') && code.length >= 10) {
-      res.json({ 
-        valid: true, 
-        message: 'Access code is valid',
-        code: code
-      });
-    } else {
-      res.json({ 
-        valid: false, 
-        message: 'Invalid access code format'
-      });
-    }
-  } catch (error) {
-    console.error('Error validating code:', error);
-    res.status(500).json({ error: 'Internal server error' });
+app.post('/api/validate-code', (req, res) => {
+  const { code } = req.body;
+  
+  if (!code) {
+    return res.status(400).json({ error: 'Access code is required' });
+  }
+  
+  // Simple validation - in production, check against database
+  const isValid = code.startsWith('WN-') && code.length >= 10;
+  
+  if (isValid) {
+    res.json({ 
+      valid: true, 
+      message: 'Access code validated successfully',
+      code: code
+    });
+  } else {
+    res.status(400).json({ 
+      valid: false, 
+      error: 'Invalid access code format' 
+    });
   }
 });
 
@@ -120,37 +162,6 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 });
 
-// Stripe webhook
-app.post('/api/webhook', express.raw({type: 'application/json'}), (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.log(`Webhook signature verification failed.`, err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  // Handle the event
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      console.log('Payment successful:', session.id);
-      
-      // Generate access code
-      const accessCode = generateAccessCode();
-      console.log('Generated access code:', accessCode);
-      
-      // In production, save to database and send email to customer
-      break;
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
-
-  res.json({received: true});
-});
-
 // Generate access code
 function generateAccessCode() {
   const prefix = "WN";
@@ -164,4 +175,5 @@ function generateAccessCode() {
 app.listen(PORT, () => {
   console.log(`Wedding Newspaper API running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
