@@ -1,0 +1,27 @@
+{
+  "name": "wedding-newspaper-api",
+  "version": "1.0.0",
+  "description": "Wedding Newspaper AI API Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "stripe": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "wedding",
+    "newspaper",
+    "api",
+    "stripe",
+    "payments"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
