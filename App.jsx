@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import TagManager from 'react-gtm-module';
+
 import './App.css';
 
 // Analytics helper functions
@@ -59,6 +61,19 @@ function App() {
   const [startTime, setStartTime] = useState(null);
 
   // Track page load and session start
+  useEffect(() => {
+  // Initialize GTM
+  TagManager.initialize({ gtmId: 'GTM-54WR47S7' });
+  
+  // Track page load
+  if (window.dataLayer) {
+    window.dataLayer.push({
+      event: 'page_view',
+      page_title: 'AI Wedding Newspaper Generator'
+    });
+  }
+}, []);
+
   useEffect(() => {
     trackEvent('page_view', {
       page_title: 'AI Wedding Newspaper Generator',
